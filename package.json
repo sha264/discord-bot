@@ -1,5 +1,5 @@
 {
-  "name": "discord-vercel-todo-bot",
+  "name": "discord-bot",
   "private": true,
   "version": "0.1.0",
   "scripts": {
