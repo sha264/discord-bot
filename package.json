@@ -3,10 +3,14 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "register:commands": "node ./scripts/register-commands.mjs"
+    "predev": "node ./scripts/check-env-file.mjs",
+    "prebuild": "node ./scripts/check-env-file.mjs",
+    "prestart": "node ./scripts/check-env-file.mjs",
+    "preregister:commands": "node ./scripts/check-env-file.mjs",
+    "dev": "next dev --hostname 127.0.0.1 --webpack",
+    "build": "next build --webpack",
+    "start": "next start --hostname 127.0.0.1",
+    "register:commands": "node --env-file=.env ./scripts/register-commands.mjs"
   },
   "dependencies": {
     "@upstash/redis": "latest",
