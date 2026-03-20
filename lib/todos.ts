@@ -1,5 +1,4 @@
 import { redis } from "@/lib/redis";
-import { formatIsoForDisplay } from "@/lib/time";
 
 export type TodoStatus = "open" | "done";
 
@@ -130,11 +129,7 @@ export function formatTodoList(title: string, todos: Todo[]): string {
     return `${title}\n0件`;
   }
 
-  const lines = todos.map((todo) => {
-    const tail = todo.status === "open" ? `作成 ${formatIsoForDisplay(todo.createdAt)}` : `完了 ${formatIsoForDisplay(todo.completedAt)}`;
-    return `#${todo.id} ${todo.text}  ${tail}`;
-  });
-
+  const lines = todos.map((todo) => `#${todo.id} ${todo.text}`);
   return `${title} ${todos.length}件\n\n${lines.join("\n")}`;
 }
 
@@ -148,6 +143,6 @@ export function formatDailyTodoMessage(todos: Todo[]): string {
     `今日のTodoは ${todos.length}件です。`,
     "",
     body,
-    "",
+    ""
   ].join("\n");
 }
