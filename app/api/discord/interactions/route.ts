@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     if (commandName === "todo") {
       const text = getOptionValue<string>(interaction, "text") ?? "";
       const todo = await createTodo(text);
-      return ephemeralMessage(`追加したよ\n#${todo.id} ${todo.text}`);
+      return ephemeralMessage(`以下のTODOを追加しました！\n#${todo.id} ${todo.text}`);
     }
 
     if (commandName === "todo-list") {
@@ -84,21 +84,21 @@ export async function POST(request: Request) {
 
       const result = await markTodoDone(id);
       if (!result.todo) {
-        return ephemeralMessage(`Todo #${id} は見つからなかった。`);
+        return ephemeralMessage(`Todo #${id} が見つかりません`);
       }
 
       if (result.alreadyDone) {
-        return ephemeralMessage(`すでに完了済み\n#${result.todo.id} ${result.todo.text}`);
+        return ephemeralMessage(`すでに完了済みです\n#${result.todo.id} ${result.todo.text}`);
       }
 
-      return ephemeralMessage(`完了にしたよ\n#${result.todo.id} ${result.todo.text}`);
+      return ephemeralMessage(`完了にしました！\n#${result.todo.id} ${result.todo.text}`);
     }
 
     if (commandName === "info") {
       const topic = getOptionValue<string>(interaction, "topic") ?? "";
       const info = resolveInfo(topic);
       if (!info) {
-        return ephemeralMessage(`topic: ${topic} は未登録。`);
+        return ephemeralMessage(`topic: ${topic} は登録されていません`);
       }
 
       return ephemeralMessage(`${info.entry.title}\n${info.entry.url}`);
@@ -107,6 +107,6 @@ export async function POST(request: Request) {
     return ephemeralMessage(`未対応コマンド: ${commandName ?? "unknown"}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return ephemeralMessage(`エラーが発生した\n${message}`);
+    return ephemeralMessage(`エラーが発生しました\n${message}`);
   }
 }

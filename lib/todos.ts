@@ -140,16 +140,14 @@ export function formatTodoList(title: string, todos: Todo[]): string {
 
 export function formatDailyTodoMessage(todos: Todo[]): string {
   if (todos.length === 0) {
-    return "おはよう 今日の未完了Todoは0件";
+    return "今日のTodoは0件です。";
   }
 
   const body = todos.map((todo) => `#${todo.id} ${todo.text}`).join("\n");
   return [
-    `おはよう 今日の未完了Todo ${todos.length}件`,
+    `今日のTodoは ${todos.length}件です。`,
     "",
     body,
     "",
-    "完了したら /todo-done id:番号",
-    "一覧確認は /todo-list"
   ].join("\n");
 }
