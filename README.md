@@ -27,7 +27,7 @@ sequenceDiagram
 - `/todo text:...` で Todo 追加
 - `/todo-list` で Todo 一覧取得
 - `/todo-done id:...` で完了
-- `/info topic:外泊` のように固定リンクを返す
+- `/info topic:<topic-name>` のように固定リンクを返す
 - 毎朝 JST 8時台に未完了 Todo を Discord に自動通知
 
 ## 技術構成
@@ -159,19 +159,11 @@ npm run register:commands
 
 ```json
 {
-  "外泊": {
-    "title": "外泊の持ち物",
-    "url": "https://discord.com/channels/...",
-    "aliases": ["泊まり", "宿泊"]
+  "topic": {
+    "title": "title",
+    "url": "url",
+    "aliases": ["title1", "title2"]
   },
-  "ダイビング": {
-    "title": "ダイビングの持ち物",
-    "url": "https://discord.com/channels/..."
-  },
-  "ジム": {
-    "title": "ジムの持ち物",
-    "url": "https://discord.com/channels/..."
-  }
 }
 ```
 
@@ -191,19 +183,8 @@ npm run register:commands
 }
 ```
 
-これは UTC 23:00 なので JST では朝 8時です。
+これは UTC 23:00 なので JST では朝 8時です。8時台のどこかで実行されます。
 
-Hobby プランでは 8:00 ちょうどではなく 8時台のどこかで実行されます。
-
-## 動作確認
-
-- `https://YOUR_DOMAIN/api/health` が `{"ok":true,...}` を返す
-- Discord で `/todo` が候補に出る
-- `/todo text:洗濯する` が成功する
-- `/todo-list` で見える
-- `/todo-done id:1` で完了になる
-- `/info topic:外泊` でリンクが返る
-- 次の朝に webhook チャンネルへ一覧が飛ぶ
 
 ## 補足
 

@@ -62,7 +62,7 @@ const commands = [
     options: [
       {
         name: "topic",
-        description: "外泊, ダイビング, ジム など",
+        description: "",
         type: 3,
         required: true
       }

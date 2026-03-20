@@ -5,21 +5,11 @@ export type InfoEntry = {
 };
 
 const DEFAULT_INFO_MAP: Record<string, InfoEntry> = {
-  外泊: {
-    title: "外泊の持ち物",
-    url: "https://discord.com/channels/REPLACE_ME/REPLACE_ME/REPLACE_ME",
-    aliases: ["泊まり", "宿泊"]
+  stay: {
+    title: "stay",
+    url: "https://www.notion.so/27c910452e0a8036a0c8e2f55024732a",
+    aliases: ["泊まり"]
   },
-  ダイビング: {
-    title: "ダイビングの持ち物",
-    url: "https://discord.com/channels/REPLACE_ME/REPLACE_ME/REPLACE_ME",
-    aliases: ["diving"]
-  },
-  ジム: {
-    title: "ジムの持ち物",
-    url: "https://discord.com/channels/REPLACE_ME/REPLACE_ME/REPLACE_ME",
-    aliases: ["gym"]
-  }
 };
 
 function normalizeTopic(input: string): string {
