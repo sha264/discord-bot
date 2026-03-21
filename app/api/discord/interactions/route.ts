@@ -1,5 +1,5 @@
 import { DISCORD_INTERACTION_RESPONSE_TYPE, DISCORD_MESSAGE_FLAGS, verifyDiscordRequest } from "@/lib/discord";
-import { createInfoDeleteToken, deleteInfoByToken, listInfos, resolveInfo, upsertInfo, type InfoEntry } from "@/lib/infos";
+import { createInfoDeleteToken, deleteInfo, deleteInfoByToken, listInfos, resolveInfo, upsertInfo, type InfoEntry } from "@/lib/infos";
 import { createTodo, listTodos, markTodoDone, type Todo } from "@/lib/todos";
 
 type DiscordCommandOption = {
@@ -305,6 +305,20 @@ export async function POST(request: Request) {
       return ephemeralMessageWithComponents(view.content, view.components);
     }
 
+    if (commandName === "todo-delete") {
+      const id = Number(getOptionValue<number>(interaction, "id"));
+      if (!Number.isInteger(id) || id <= 0) {
+        return ephemeralMessage("id は正の整数で入れてください。");
+      }
+
+      const result = await markTodoDone(id);
+      if (!result.todo) {
+        return ephemeralMessage(`Todo #${id} が見つかりません`);
+      }
+
+      return ephemeralMessage(`削除しました！\n#${result.todo.id} ${result.todo.text}`);
+    }
+
     if (commandName === "info") {
       const title = getOptionValue<string>(interaction, "title") ?? "";
       const url = getOptionValue<string>(interaction, "url");
@@ -344,6 +358,20 @@ export async function POST(request: Request) {
 
       const view = await buildInfoListResponse(limit);
       return ephemeralMessageWithComponents(view.content, view.components);
+    }
+
+    if (commandName === "info-delete") {
+      const title = getOptionValue<string>(interaction, "title") ?? "";
+      if (!title.trim()) {
+        return ephemeralMessage("title を指定してください。");
+      }
+
+      const deleted = await deleteInfo(title);
+      if (!deleted) {
+        return ephemeralMessage(`title: ${title} は登録されていません`);
+      }
+
+      return ephemeralMessage(`削除しました\n${deleted.title}\n${deleted.url}`);
     }
 
     return ephemeralMessage(`未対応コマンド: ${commandName ?? "unknown"}`);
