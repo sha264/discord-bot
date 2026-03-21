@@ -191,3 +191,9 @@ npm run register:commands
 - 毎朝通知は二重送信を避けるため JST 日付キーでガードしています。
 - cron route には `CRON_SECRET` チェックを入れています。
 - 日記本文はこの Bot の管理対象にしていません。
+
+## 追加
+- 完了タスクのDBからの削除、ランダムな3桁ナンバリングへの変更
+- info-configの作成
+- info-listの実装
+- infoのDB登録
