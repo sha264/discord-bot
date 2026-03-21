@@ -154,6 +154,9 @@ npm run register:commands
 - 登録/更新: `/info title:stay url:https://example.com`
 - 削除: `/info-list` の削除ボタン
 
+`/todo-list` と `/info-list` は各行の右に削除ボタンを表示します。  
+Discord のコンポーネント上限のため、削除ボタンは先頭10件まで表示されます。
+
 ## Cron の仕様
 
 `vercel.json` で以下を設定しています。

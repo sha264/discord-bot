@@ -1,6 +1,6 @@
 import { DISCORD_INTERACTION_RESPONSE_TYPE, DISCORD_MESSAGE_FLAGS, verifyDiscordRequest } from "@/lib/discord";
 import { createInfoDeleteToken, deleteInfoByToken, listInfos, resolveInfo, upsertInfo, type InfoEntry } from "@/lib/infos";
-import { createTodo, formatTodoList, listTodos, markTodoDone, type Todo } from "@/lib/todos";
+import { createTodo, listTodos, markTodoDone, type Todo } from "@/lib/todos";
 
 type DiscordCommandOption = {
   name: string;
@@ -28,7 +28,7 @@ const COMPONENT_TYPE = {
   BUTTON: 2
 } as const;
 
-const MAX_INFO_LIST_MESSAGE_LENGTH = 1900;
+const MAX_INLINE_DELETE_ITEMS = 10;
 
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
@@ -119,10 +119,6 @@ function shorten(text: string, maxLength = 18): string {
   return `${text.slice(0, maxLength - 1)}…`;
 }
 
-function formatInfoEntry(entry: InfoEntry): string {
-  return `- ${entry.title}\n  ${entry.url}`;
-}
-
 function makeInfoDeleteButtonId(token: string, limit: number): string {
   return `info_delete:${token}:${limit}`;
 }
@@ -146,107 +142,122 @@ function parseInfoDeleteButtonId(customId: string): { token: string; limit: numb
   return { token, limit };
 }
 
-function formatInfoListView(infos: InfoEntry[]): { content: string; visibleInfos: InfoEntry[] } {
-  if (infos.length === 0) {
-    return {
-      content: "info は0件です。/info で登録してください。",
-      visibleInfos: []
-    };
+function formatTodoListSummary(title: string, totalCount: number, shownCount: number): string {
+  if (totalCount === 0) {
+    return `${title}\n0件`;
   }
 
-  const header = `info 一覧 ${infos.length}件`;
-  const lines = infos.map((info) => formatInfoEntry(info));
-  const full = `${header}\n\n${lines.join("\n")}`;
-  if (full.length <= MAX_INFO_LIST_MESSAGE_LENGTH) {
-    return { content: full, visibleInfos: infos };
+  if (totalCount > shownCount) {
+    return `${title} ${totalCount}件\n削除ボタンは先頭 ${shownCount}件まで表示しています。`;
   }
 
-  const kept: string[] = [];
-  const visibleInfos: InfoEntry[] = [];
-  let used = `${header}\n\n`.length;
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
-    const nextLength = used + line.length + 1;
-    if (nextLength > MAX_INFO_LIST_MESSAGE_LENGTH - 24) {
-      break;
-    }
-    kept.push(line);
-    visibleInfos.push(infos[i]);
-    used = nextLength;
-  }
-
-  const omittedCount = lines.length - kept.length;
-  return {
-    content: `${header}\n\n${kept.join("\n")}\n...他 ${omittedCount}件`,
-    visibleInfos
-  };
+  return `${title} ${totalCount}件`;
 }
 
-async function buildInfoButtons(infos: InfoEntry[], limit: number) {
-  const targets = infos.slice(0, 20);
-  if (targets.length === 0) {
-    return [];
+function formatInfoListSummary(totalCount: number, shownCount: number): string {
+  if (totalCount === 0) {
+    return "info は0件です。/info で登録してください。";
   }
 
-  const rows = [];
-  for (let i = 0; i < targets.length; i += 5) {
-    const chunk = targets.slice(i, i + 5);
-    const tokens = await Promise.all(chunk.map((info) => createInfoDeleteToken(info.title)));
-    rows.push({
-      type: COMPONENT_TYPE.ACTION_ROW,
-      components: chunk.map((info, index) => ({
-        type: COMPONENT_TYPE.BUTTON,
-        style: 4,
-        custom_id: makeInfoDeleteButtonId(tokens[index], limit),
-        label: `削除 ${shorten(info.title, 20)}`
-      }))
-    });
+  if (totalCount > shownCount) {
+    return `info 一覧 ${totalCount}件\n削除ボタンは先頭 ${shownCount}件まで表示しています。`;
   }
 
-  return rows;
+  return `info 一覧 ${totalCount}件`;
 }
 
 function buildTodoButtons(todos: Todo[], status: "open" | "done" | "all") {
-  const openTodos = todos.filter((todo) => todo.status === "open").slice(0, 20);
+  const openTodos = todos.filter((todo) => todo.status === "open");
+  const targets = openTodos.slice(0, MAX_INLINE_DELETE_ITEMS);
 
-  if (openTodos.length === 0) {
-    return [];
+  if (targets.length === 0) {
+    return { components: [], totalCount: openTodos.length, shownCount: 0 };
   }
 
   const rows = [];
+  for (let i = 0; i < targets.length; i += 2) {
+    const chunk = targets.slice(i, i + 2);
+    const components = chunk.flatMap((todo, index) => ([
+      {
+        type: COMPONENT_TYPE.BUTTON,
+        style: 2,
+        custom_id: `todo_label:${todo.id}:${i + index}`,
+        label: shorten(`#${todo.id} ${todo.text}`, 30),
+        disabled: true
+      },
+      {
+        type: COMPONENT_TYPE.BUTTON,
+        style: 4,
+        custom_id: makeDoneButtonId(todo.id, status),
+        label: "delete"
+      }
+    ]));
 
-  for (let i = 0; i < openTodos.length; i += 5) {
-    const chunk = openTodos.slice(i, i + 5);
     rows.push({
       type: COMPONENT_TYPE.ACTION_ROW,
-      components: chunk.map((todo) => ({
-        type: COMPONENT_TYPE.BUTTON,
-        style: 3,
-        custom_id: makeDoneButtonId(todo.id, status),
-        label: `削除 #${todo.id} ${shorten(todo.text)}`
-      }))
+      components
     });
   }
 
-  return rows;
+  return { components: rows, totalCount: openTodos.length, shownCount: targets.length };
+}
+
+async function buildInfoButtons(infos: InfoEntry[], limit: number) {
+  const targets = infos.slice(0, MAX_INLINE_DELETE_ITEMS);
+  if (targets.length === 0) {
+    return { components: [], totalCount: infos.length, shownCount: 0 };
+  }
+
+  const tokens = await Promise.all(targets.map((info) => createInfoDeleteToken(info.title)));
+  const rows = [];
+
+  for (let i = 0; i < targets.length; i += 2) {
+    const chunk = targets.slice(i, i + 2);
+    const components = chunk.flatMap((info, index) => {
+      const tokenIndex = i + index;
+      return [
+        {
+          type: COMPONENT_TYPE.BUTTON,
+          style: 2,
+          custom_id: `info_label:${tokenIndex}`,
+          label: shorten(info.title, 30),
+          disabled: true
+        },
+        {
+          type: COMPONENT_TYPE.BUTTON,
+          style: 4,
+          custom_id: makeInfoDeleteButtonId(tokens[tokenIndex], limit),
+          label: "削除"
+        }
+      ];
+    });
+
+    rows.push({
+      type: COMPONENT_TYPE.ACTION_ROW,
+      components
+    });
+  }
+
+  return { components: rows, totalCount: infos.length, shownCount: targets.length };
 }
 
 async function buildTodoListResponse(status: "open" | "done" | "all") {
   const todos = await listTodos(status, 20);
   const title = getTitle(status);
+  const buttonView = buildTodoButtons(todos, status);
 
   return {
-    content: formatTodoList(title, todos),
-    components: buildTodoButtons(todos, status)
+    content: formatTodoListSummary(title, buttonView.totalCount, buttonView.shownCount),
+    components: buttonView.components
   };
 }
 
 async function buildInfoListResponse(limit: number) {
   const infos = await listInfos(limit);
-  const view = formatInfoListView(infos);
+  const buttonView = await buildInfoButtons(infos, limit);
   return {
-    content: view.content,
-    components: await buildInfoButtons(view.visibleInfos, limit)
+    content: formatInfoListSummary(buttonView.totalCount, buttonView.shownCount),
+    components: buttonView.components
   };
 }
 
