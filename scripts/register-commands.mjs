@@ -61,26 +61,14 @@ const commands = [
     type: 1,
     options: [
       {
-        name: "topic",
-        description: "参照キー（登録時も必須）",
+        name: "title",
+        description: "情報タイトル（参照キー）",
         type: 3,
         required: true
       },
       {
         name: "url",
         description: "登録または更新したいURL",
-        type: 3,
-        required: false
-      },
-      {
-        name: "title",
-        description: "表示タイトル（省略時は topic）",
-        type: 3,
-        required: false
-      },
-      {
-        name: "aliases",
-        description: "別名（カンマ区切り）",
         type: 3,
         required: false
       }
@@ -98,6 +86,19 @@ const commands = [
         required: false,
         min_value: 1,
         max_value: 50
+      }
+    ]
+  },
+  {
+    name: "info-delete",
+    description: "登録済み情報を削除する",
+    type: 1,
+    options: [
+      {
+        name: "title",
+        description: "削除したい情報タイトル",
+        type: 3,
+        required: true
       }
     ]
   }

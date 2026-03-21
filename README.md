@@ -27,8 +27,9 @@ sequenceDiagram
 - `/todo text:...` で Todo 追加
 - `/todo-list` で Todo 一覧取得
 - `/todo-done id:...` で完了
-- `/info topic:<topic-name>` で登録済み情報を取得
-- `/info topic:<topic-name> url:<url> title:<title> aliases:<a,b>` で情報を登録/更新
+- `/info title:<title>` で登録済み情報を取得
+- `/info title:<title> url:<url>` で情報を登録/更新
+- `/info-delete title:<title>` で登録済み情報を削除
 - `/info-list` で登録済み情報の一覧を取得
 - 毎朝 JST 8時台に未完了 Todo を Discord に自動通知
 
@@ -151,8 +152,9 @@ npm run register:commands
 
 `/info` は参照と登録/更新を兼ねています。
 
-- 参照: `/info topic:stay`
-- 登録/更新: `/info topic:stay url:https://example.com title:stay aliases:泊まり,hotel`
+- 参照: `/info title:stay`
+- 登録/更新: `/info title:stay url:https://example.com`
+- 削除: `/info-delete title:stay`
 
 `/info-list` で現在の登録一覧を確認できます。
 

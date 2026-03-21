@@ -1,5 +1,5 @@
 import { DISCORD_INTERACTION_RESPONSE_TYPE, DISCORD_MESSAGE_FLAGS, verifyDiscordRequest } from "@/lib/discord";
-import { listInfos, resolveInfo, upsertInfo, type InfoEntry } from "@/lib/infos";
+import { deleteInfo, listInfos, resolveInfo, upsertInfo, type InfoEntry } from "@/lib/infos";
 import { createTodo, formatTodoList, listTodos, markTodoDone, type Todo } from "@/lib/todos";
 
 type DiscordCommandOption = {
@@ -119,20 +119,8 @@ function shorten(text: string, maxLength = 18): string {
   return `${text.slice(0, maxLength - 1)}…`;
 }
 
-function splitAliases(raw: string | undefined): string[] {
-  if (!raw) {
-    return [];
-  }
-
-  return raw
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-}
-
 function formatInfoEntry(entry: InfoEntry): string {
-  const aliasPart = entry.aliases.length > 0 ? ` aliases: ${entry.aliases.join(", ")}` : "";
-  return `- ${entry.topic}: ${entry.url}${aliasPart}`;
+  return `- ${entry.title}\n  ${entry.url}`;
 }
 
 function formatInfoListMessage(infos: InfoEntry[]): string {
@@ -272,12 +260,13 @@ export async function POST(request: Request) {
     }
 
     if (commandName === "info") {
-      const topic = getOptionValue<string>(interaction, "topic") ?? "";
-      const title = getOptionValue<string>(interaction, "title");
+      const title = getOptionValue<string>(interaction, "title") ?? "";
       const url = getOptionValue<string>(interaction, "url");
-      const aliasesRaw = getOptionValue<string>(interaction, "aliases");
+      if (!title.trim()) {
+        return ephemeralMessage("title を指定してください。");
+      }
 
-      const hasRegistrationInput = Boolean((url ?? "").trim() || (title ?? "").trim() || (aliasesRaw ?? "").trim());
+      const hasRegistrationInput = Boolean((url ?? "").trim());
       if (hasRegistrationInput) {
         const normalizedUrl = (url ?? "").trim();
         if (!normalizedUrl) {
@@ -285,24 +274,20 @@ export async function POST(request: Request) {
         }
 
         const result = await upsertInfo({
-          topic,
           title,
-          url: normalizedUrl,
-          aliases: splitAliases(aliasesRaw)
+          url: normalizedUrl
         });
 
         const action = result.created ? "登録しました" : "更新しました";
-        const aliases = result.entry.aliases.length > 0 ? `\naliases: ${result.entry.aliases.join(", ")}` : "";
-        return ephemeralMessage(`${action}\n${result.entry.title}\n${result.entry.url}${aliases}`);
+        return ephemeralMessage(`${action}\n${result.entry.title}\n${result.entry.url}`);
       }
 
-      const info = await resolveInfo(topic);
+      const info = await resolveInfo(title);
       if (!info) {
-        return ephemeralMessage(`topic: ${topic} は登録されていません`);
+        return ephemeralMessage(`title: ${title} は登録されていません`);
       }
 
-      const aliases = info.aliases.length > 0 ? `\naliases: ${info.aliases.join(", ")}` : "";
-      return ephemeralMessage(`${info.title}\n${info.url}${aliases}`);
+      return ephemeralMessage(`${info.title}\n${info.url}`);
     }
 
     if (commandName === "info-list") {
@@ -313,6 +298,20 @@ export async function POST(request: Request) {
 
       const infos = await listInfos(limit);
       return ephemeralMessage(formatInfoListMessage(infos));
+    }
+
+    if (commandName === "info-delete") {
+      const title = getOptionValue<string>(interaction, "title") ?? "";
+      if (!title.trim()) {
+        return ephemeralMessage("title を指定してください。");
+      }
+
+      const deleted = await deleteInfo(title);
+      if (!deleted) {
+        return ephemeralMessage(`title: ${title} は登録されていません`);
+      }
+
+      return ephemeralMessage(`削除しました\n${deleted.title}\n${deleted.url}`);
     }
 
     return ephemeralMessage(`未対応コマンド: ${commandName ?? "unknown"}`);
