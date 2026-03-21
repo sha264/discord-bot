@@ -1,5 +1,5 @@
 import { DISCORD_INTERACTION_RESPONSE_TYPE, DISCORD_MESSAGE_FLAGS, verifyDiscordRequest } from "@/lib/discord";
-import { resolveInfo } from "@/lib/info-config";
+import { listInfos, resolveInfo, upsertInfo, type InfoEntry } from "@/lib/infos";
 import { createTodo, formatTodoList, listTodos, markTodoDone, type Todo } from "@/lib/todos";
 
 type DiscordCommandOption = {
@@ -27,6 +27,8 @@ const COMPONENT_TYPE = {
   ACTION_ROW: 1,
   BUTTON: 2
 } as const;
+
+const MAX_INFO_LIST_MESSAGE_LENGTH = 1900;
 
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
@@ -115,6 +117,49 @@ function shorten(text: string, maxLength = 18): string {
     return text;
   }
   return `${text.slice(0, maxLength - 1)}…`;
+}
+
+function splitAliases(raw: string | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+function formatInfoEntry(entry: InfoEntry): string {
+  const aliasPart = entry.aliases.length > 0 ? ` aliases: ${entry.aliases.join(", ")}` : "";
+  return `- ${entry.topic}: ${entry.url}${aliasPart}`;
+}
+
+function formatInfoListMessage(infos: InfoEntry[]): string {
+  if (infos.length === 0) {
+    return "info は0件です。/info で登録してください。";
+  }
+
+  const header = `info 一覧 ${infos.length}件`;
+  const lines = infos.map((info) => formatInfoEntry(info));
+  const full = `${header}\n\n${lines.join("\n")}`;
+  if (full.length <= MAX_INFO_LIST_MESSAGE_LENGTH) {
+    return full;
+  }
+
+  const kept: string[] = [];
+  let used = `${header}\n\n`.length;
+  for (const line of lines) {
+    const nextLength = used + line.length + 1;
+    if (nextLength > MAX_INFO_LIST_MESSAGE_LENGTH - 24) {
+      break;
+    }
+    kept.push(line);
+    used = nextLength;
+  }
+
+  const omittedCount = lines.length - kept.length;
+  return `${header}\n\n${kept.join("\n")}\n...他 ${omittedCount}件`;
 }
 
 function buildTodoButtons(todos: Todo[], status: "open" | "done" | "all") {
@@ -228,12 +273,46 @@ export async function POST(request: Request) {
 
     if (commandName === "info") {
       const topic = getOptionValue<string>(interaction, "topic") ?? "";
-      const info = resolveInfo(topic);
+      const title = getOptionValue<string>(interaction, "title");
+      const url = getOptionValue<string>(interaction, "url");
+      const aliasesRaw = getOptionValue<string>(interaction, "aliases");
+
+      const hasRegistrationInput = Boolean((url ?? "").trim() || (title ?? "").trim() || (aliasesRaw ?? "").trim());
+      if (hasRegistrationInput) {
+        const normalizedUrl = (url ?? "").trim();
+        if (!normalizedUrl) {
+          return ephemeralMessage("登録または更新時は url を指定してください。");
+        }
+
+        const result = await upsertInfo({
+          topic,
+          title,
+          url: normalizedUrl,
+          aliases: splitAliases(aliasesRaw)
+        });
+
+        const action = result.created ? "登録しました" : "更新しました";
+        const aliases = result.entry.aliases.length > 0 ? `\naliases: ${result.entry.aliases.join(", ")}` : "";
+        return ephemeralMessage(`${action}\n${result.entry.title}\n${result.entry.url}${aliases}`);
+      }
+
+      const info = await resolveInfo(topic);
       if (!info) {
         return ephemeralMessage(`topic: ${topic} は登録されていません`);
       }
 
-      return ephemeralMessage(`${info.entry.title}\n${info.entry.url}`);
+      const aliases = info.aliases.length > 0 ? `\naliases: ${info.aliases.join(", ")}` : "";
+      return ephemeralMessage(`${info.title}\n${info.url}${aliases}`);
+    }
+
+    if (commandName === "info-list") {
+      const limit = Number(getOptionValue<number>(interaction, "limit") ?? 20);
+      if (!Number.isInteger(limit) || limit <= 0) {
+        return ephemeralMessage("limit は正の整数で入れてください。");
+      }
+
+      const infos = await listInfos(limit);
+      return ephemeralMessage(formatInfoListMessage(infos));
     }
 
     return ephemeralMessage(`未対応コマンド: ${commandName ?? "unknown"}`);

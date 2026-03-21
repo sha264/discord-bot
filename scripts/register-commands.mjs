@@ -57,14 +57,47 @@ const commands = [
   },
   {
     name: "info",
-    description: "固定情報のリンクを返す",
+    description: "情報を参照・登録する",
     type: 1,
     options: [
       {
         name: "topic",
-        description: "",
+        description: "参照キー（登録時も必須）",
         type: 3,
         required: true
+      },
+      {
+        name: "url",
+        description: "登録または更新したいURL",
+        type: 3,
+        required: false
+      },
+      {
+        name: "title",
+        description: "表示タイトル（省略時は topic）",
+        type: 3,
+        required: false
+      },
+      {
+        name: "aliases",
+        description: "別名（カンマ区切り）",
+        type: 3,
+        required: false
+      }
+    ]
+  },
+  {
+    name: "info-list",
+    description: "登録済み情報を一覧表示する",
+    type: 1,
+    options: [
+      {
+        name: "limit",
+        description: "表示件数（1-50）",
+        type: 4,
+        required: false,
+        min_value: 1,
+        max_value: 50
       }
     ]
   }

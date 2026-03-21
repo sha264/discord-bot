@@ -27,7 +27,9 @@ sequenceDiagram
 - `/todo text:...` で Todo 追加
 - `/todo-list` で Todo 一覧取得
 - `/todo-done id:...` で完了
-- `/info topic:<topic-name>` のように固定リンクを返す
+- `/info topic:<topic-name>` で登録済み情報を取得
+- `/info topic:<topic-name> url:<url> title:<title> aliases:<a,b>` で情報を登録/更新
+- `/info-list` で登録済み情報の一覧を取得
 - 毎朝 JST 8時台に未完了 Todo を Discord に自動通知
 
 ## 技術構成
@@ -145,27 +147,14 @@ npm run register:commands
 
 開発中は `DISCORD_GUILD_ID` を入れてギルドスコープ登録にすると反映が速いです。
 
-## `/info` の編集方法
+## `/info` の登録方法
 
-### 方法A
+`/info` は参照と登録/更新を兼ねています。
 
-`lib/info-config.ts` を直接編集して再デプロイします。
+- 参照: `/info topic:stay`
+- 登録/更新: `/info topic:stay url:https://example.com title:stay aliases:泊まり,hotel`
 
-### 方法B
-
-`INFO_MAP_JSON` を環境変数で入れます。
-
-例:
-
-```json
-{
-  "topic": {
-    "title": "title",
-    "url": "url",
-    "aliases": ["title1", "title2"]
-  },
-}
-```
+`/info-list` で現在の登録一覧を確認できます。
 
 ## Cron の仕様
 
