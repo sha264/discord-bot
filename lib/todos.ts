@@ -10,12 +10,9 @@ export type Todo = {
   completedAt: string | null;
 };
 
+const TODO_ID_KEY = "todo:next_id";
 const TODO_OPEN_LIST_KEY = "todos:open";
-const LEGACY_TODO_DONE_LIST_KEY = "todos:done";
-const TODO_ID_MIN = 100;
-const TODO_ID_MAX = 999;
-const TODO_ID_SPACE_SIZE = TODO_ID_MAX - TODO_ID_MIN + 1;
-const MAX_TODO_ID_ASSIGN_ATTEMPTS = TODO_ID_SPACE_SIZE * 2;
+const TODO_DONE_LIST_KEY = "todos:done";
 
 function todoKey(id: number): string {
   return `todo:${id}`;
@@ -23,43 +20,6 @@ function todoKey(id: number): string {
 
 function normalizeTodoText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
-}
-
-function generateRandomTodoId(): number {
-  return Math.floor(Math.random() * TODO_ID_SPACE_SIZE) + TODO_ID_MIN;
-}
-
-async function tryCreateTodoWithId(id: number, text: string, createdAt: string): Promise<Todo | null> {
-  const todo: Todo = {
-    id,
-    text,
-    status: "open",
-    createdAt,
-    completedAt: null
-  };
-
-  const inserted = await redis.set(todoKey(id), todo, { nx: true });
-  if (inserted) {
-    await redis.lpush(TODO_OPEN_LIST_KEY, id);
-    return todo;
-  }
-
-  // 旧バージョンで残っている完了タスクはこのタイミングで回収する
-  const existing = await getTodo(id);
-  if (existing?.status !== "done") {
-    return null;
-  }
-
-  await redis.del(todoKey(id));
-  await redis.lrem(LEGACY_TODO_DONE_LIST_KEY, 0, id);
-
-  const reclaimed = await redis.set(todoKey(id), todo, { nx: true });
-  if (!reclaimed) {
-    return null;
-  }
-
-  await redis.lpush(TODO_OPEN_LIST_KEY, id);
-  return todo;
 }
 
 function castTodo(value: unknown): Todo | null {
@@ -87,34 +47,19 @@ export async function createTodo(text: string): Promise<Todo> {
     throw new Error("Todo text must not be empty.");
   }
 
-  const attemptedIds = new Set<number>();
-  const createdAt = new Date().toISOString();
+  const id = await redis.incr(TODO_ID_KEY);
+  const todo: Todo = {
+    id,
+    text: normalized,
+    status: "open",
+    createdAt: new Date().toISOString(),
+    completedAt: null
+  };
 
-  for (let attempt = 0; attempt < MAX_TODO_ID_ASSIGN_ATTEMPTS && attemptedIds.size < TODO_ID_SPACE_SIZE; attempt += 1) {
-    const id = generateRandomTodoId();
-    if (attemptedIds.has(id)) {
-      continue;
-    }
-    attemptedIds.add(id);
+  await redis.set(todoKey(id), todo);
+  await redis.lpush(TODO_OPEN_LIST_KEY, id);
 
-    const todo = await tryCreateTodoWithId(id, normalized, createdAt);
-    if (todo) {
-      return todo;
-    }
-  }
-
-  for (let id = TODO_ID_MIN; id <= TODO_ID_MAX; id += 1) {
-    if (attemptedIds.has(id)) {
-      continue;
-    }
-
-    const todo = await tryCreateTodoWithId(id, normalized, createdAt);
-    if (todo) {
-      return todo;
-    }
-  }
-
-  throw new Error("Todo ID の採番に失敗しました。空きIDを確保して再試行してください。");
+  return todo;
 }
 
 export async function getTodo(id: number): Promise<Todo | null> {
@@ -139,8 +84,8 @@ export async function listOpenTodos(limit = 20): Promise<Todo[]> {
 }
 
 export async function listDoneTodos(limit = 20): Promise<Todo[]> {
-  void limit;
-  return [];
+  const ids = ((await redis.lrange(TODO_DONE_LIST_KEY, 0, limit - 1)) ?? []) as Array<string | number>;
+  return getTodosFromIds(ids);
 }
 
 export async function listTodos(status: "open" | "done" | "all", limit = 20): Promise<Todo[]> {
@@ -149,10 +94,11 @@ export async function listTodos(status: "open" | "done" | "all", limit = 20): Pr
   }
 
   if (status === "done") {
-    return [];
+    return listDoneTodos(limit);
   }
 
-  return listOpenTodos(limit);
+  const [openTodos, doneTodos] = await Promise.all([listOpenTodos(limit), listDoneTodos(limit)]);
+  return [...openTodos, ...doneTodos].slice(0, limit);
 }
 
 export async function markTodoDone(id: number): Promise<{ todo: Todo | null; alreadyDone: boolean }> {
@@ -161,17 +107,21 @@ export async function markTodoDone(id: number): Promise<{ todo: Todo | null; alr
     return { todo: null, alreadyDone: false };
   }
 
-  const completed: Todo = {
+  if (existing.status === "done") {
+    return { todo: existing, alreadyDone: true };
+  }
+
+  const updated: Todo = {
     ...existing,
     status: "done",
-    completedAt: existing.completedAt ?? new Date().toISOString()
+    completedAt: new Date().toISOString()
   };
 
-  await redis.lrem(TODO_OPEN_LIST_KEY, 0, id);
-  await redis.lrem(LEGACY_TODO_DONE_LIST_KEY, 0, id);
-  await redis.del(todoKey(id));
+  await redis.set(todoKey(id), updated);
+  await redis.lrem(TODO_OPEN_LIST_KEY, 1, id);
+  await redis.lpush(TODO_DONE_LIST_KEY, id);
 
-  return { todo: completed, alreadyDone: existing.status === "done" };
+  return { todo: updated, alreadyDone: false };
 }
 
 export function formatTodoList(title: string, todos: Todo[]): string {
