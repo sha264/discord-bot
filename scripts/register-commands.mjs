@@ -27,20 +27,7 @@ const commands = [
   {
     name: "todo-list",
     description: "Todo 一覧を表示する",
-    type: 1,
-    options: [
-      {
-        name: "status",
-        description: "open, done, all から選ぶ",
-        type: 3,
-        required: false,
-        choices: [
-          { name: "open", value: "open" },
-          { name: "done", value: "done" },
-          { name: "all", value: "all" }
-        ]
-      }
-    ]
+    type: 1
   },
   {
     name: "info",

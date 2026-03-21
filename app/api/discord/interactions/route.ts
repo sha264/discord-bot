@@ -28,7 +28,8 @@ const COMPONENT_TYPE = {
   BUTTON: 2
 } as const;
 
-const MAX_INLINE_DELETE_ITEMS = 10;
+const MAX_TODO_INLINE_DELETE_ITEMS = 5;
+const MAX_INFO_INLINE_DELETE_ITEMS = 10;
 
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
@@ -75,41 +76,22 @@ function updateMessage(content: string, components: unknown[]): Response {
   });
 }
 
-function normalizeStatus(status: string | undefined): "open" | "done" | "all" {
-  if (status === "done" || status === "all") {
-    return status;
-  }
-  return "open";
+function makeDoneButtonId(id: number): string {
+  return `todo_delete:${id}`;
 }
 
-function getTitle(status: "open" | "done" | "all"): string {
-  if (status === "done") {
-    return "完了タスク";
-  }
-  if (status === "all") {
-    return "タスク一覧";
-  }
-  return "TODO";
-}
-
-function makeDoneButtonId(id: number, status: "open" | "done" | "all"): string {
-  return `todo_delete:${id}:${status}`;
-}
-
-function parseDoneButtonId(customId: string): { id: number; status: "open" | "done" | "all" } | null {
+function parseDoneButtonId(customId: string): { id: number } | null {
   const parts = customId.split(":");
-  if (parts.length !== 3 || (parts[0] !== "todo_done" && parts[0] !== "todo_delete")) {
+  if (parts.length < 2 || parts.length > 3 || (parts[0] !== "todo_done" && parts[0] !== "todo_delete")) {
     return null;
   }
 
   const id = Number(parts[1]);
-  const status = normalizeStatus(parts[2]);
-
   if (!Number.isInteger(id) || id <= 0) {
     return null;
   }
 
-  return { id, status };
+  return { id };
 }
 
 function shorten(text: string, maxLength = 18): string {
@@ -166,36 +148,34 @@ function formatInfoListSummary(totalCount: number, shownCount: number): string {
   return `info 一覧 ${totalCount}件`;
 }
 
-function buildTodoButtons(todos: Todo[], status: "open" | "done" | "all") {
+function buildTodoButtons(todos: Todo[]) {
   const openTodos = todos.filter((todo) => todo.status === "open");
-  const targets = openTodos.slice(0, MAX_INLINE_DELETE_ITEMS);
+  const targets = openTodos.slice(0, MAX_TODO_INLINE_DELETE_ITEMS);
 
   if (targets.length === 0) {
     return { components: [], totalCount: openTodos.length, shownCount: 0 };
   }
 
   const rows = [];
-  for (let i = 0; i < targets.length; i += 2) {
-    const chunk = targets.slice(i, i + 2);
-    const components = chunk.flatMap((todo, index) => ([
-      {
-        type: COMPONENT_TYPE.BUTTON,
-        style: 2,
-        custom_id: `todo_label:${todo.id}:${i + index}`,
-        label: shorten(`#${todo.id} ${todo.text}`, 30),
-        disabled: true
-      },
-      {
-        type: COMPONENT_TYPE.BUTTON,
-        style: 4,
-        custom_id: makeDoneButtonId(todo.id, status),
-        label: "delete"
-      }
-    ]));
-
+  for (let i = 0; i < targets.length; i += 1) {
+    const todo = targets[i];
     rows.push({
       type: COMPONENT_TYPE.ACTION_ROW,
-      components
+      components: [
+        {
+          type: COMPONENT_TYPE.BUTTON,
+          style: 2,
+          custom_id: `todo_label:${todo.id}:${i}`,
+          label: shorten(`#${todo.id} ${todo.text}`, 50),
+          disabled: true
+        },
+        {
+          type: COMPONENT_TYPE.BUTTON,
+          style: 4,
+          custom_id: makeDoneButtonId(todo.id),
+          label: "削除"
+        }
+      ]
     });
   }
 
@@ -203,7 +183,7 @@ function buildTodoButtons(todos: Todo[], status: "open" | "done" | "all") {
 }
 
 async function buildInfoButtons(infos: InfoEntry[], limit: number) {
-  const targets = infos.slice(0, MAX_INLINE_DELETE_ITEMS);
+  const targets = infos.slice(0, MAX_INFO_INLINE_DELETE_ITEMS);
   if (targets.length === 0) {
     return { components: [], totalCount: infos.length, shownCount: 0 };
   }
@@ -241,13 +221,12 @@ async function buildInfoButtons(infos: InfoEntry[], limit: number) {
   return { components: rows, totalCount: infos.length, shownCount: targets.length };
 }
 
-async function buildTodoListResponse(status: "open" | "done" | "all") {
-  const todos = await listTodos(status, 20);
-  const title = getTitle(status);
-  const buttonView = buildTodoButtons(todos, status);
+async function buildTodoListResponse() {
+  const todos = await listTodos("open", 20);
+  const buttonView = buildTodoButtons(todos);
 
   return {
-    content: formatTodoListSummary(title, buttonView.totalCount, buttonView.shownCount),
+    content: formatTodoListSummary("TODO", buttonView.totalCount, buttonView.shownCount),
     components: buttonView.components
   };
 }
@@ -296,7 +275,7 @@ export async function POST(request: Request) {
       }
 
       const result = await markTodoDone(parsed.id);
-      const nextView = await buildTodoListResponse(parsed.status);
+      const nextView = await buildTodoListResponse();
 
       if (!result.todo) {
         return updateMessage(`Todo #${parsed.id} が見つかりません\n\n${nextView.content}`, nextView.components);
@@ -322,8 +301,7 @@ export async function POST(request: Request) {
     }
 
     if (commandName === "todo-list") {
-      const status = normalizeStatus(getOptionValue<string>(interaction, "status"));
-      const view = await buildTodoListResponse(status);
+      const view = await buildTodoListResponse();
       return ephemeralMessageWithComponents(view.content, view.components);
     }
 

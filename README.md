@@ -155,7 +155,7 @@ npm run register:commands
 - 削除: `/info-list` の削除ボタン
 
 `/todo-list` と `/info-list` は各行の右に削除ボタンを表示します。  
-Discord のコンポーネント上限のため、削除ボタンは先頭10件まで表示されます。
+Discord のコンポーネント上限のため、`todo-list` は先頭5件、`info-list` は先頭10件まで削除ボタンを表示します。
 
 ## Cron の仕様
 
