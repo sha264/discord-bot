@@ -8,17 +8,11 @@ export type InfoEntry = {
 };
 
 const INFO_TITLE_SET_KEY = "infos:titles";
-const INFO_DELETE_TOKEN_PREFIX_KEY = "infos:delete-token:";
 const DEFAULT_INFO_LIST_LIMIT = 20;
 const MAX_INFO_LIST_LIMIT = 50;
-const INFO_DELETE_TOKEN_EX_SECONDS = 60 * 60;
 
 function infoKey(normalizedTitle: string): string {
   return `info:item:${normalizedTitle}`;
-}
-
-function infoDeleteTokenKey(token: string): string {
-  return `${INFO_DELETE_TOKEN_PREFIX_KEY}${token}`;
 }
 
 function normalizeToken(input: string): string {
@@ -113,39 +107,6 @@ export async function deleteInfo(title: string): Promise<InfoEntry | null> {
   await Promise.all([
     redis.del(infoKey(normalizedTitle)),
     redis.srem(INFO_TITLE_SET_KEY, normalizedTitle)
-  ]);
-
-  return existing;
-}
-
-export async function createInfoDeleteToken(title: string): Promise<string> {
-  const normalizedTitle = normalizeTitleKey(title);
-  const token = crypto.randomUUID().replace(/-/g, "");
-  await redis.set(infoDeleteTokenKey(token), normalizedTitle, { ex: INFO_DELETE_TOKEN_EX_SECONDS });
-  return token;
-}
-
-export async function deleteInfoByToken(token: string): Promise<InfoEntry | null> {
-  const tokenValue = token.trim();
-  if (!tokenValue) {
-    return null;
-  }
-
-  const normalizedTitle = await redis.get<string>(infoDeleteTokenKey(tokenValue));
-  if (!normalizedTitle) {
-    return null;
-  }
-
-  const existing = await getInfoByTitleKey(normalizedTitle);
-  if (!existing) {
-    await redis.del(infoDeleteTokenKey(tokenValue));
-    return null;
-  }
-
-  await Promise.all([
-    redis.del(infoKey(normalizedTitle)),
-    redis.srem(INFO_TITLE_SET_KEY, normalizedTitle),
-    redis.del(infoDeleteTokenKey(tokenValue))
   ]);
 
   return existing;

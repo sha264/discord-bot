@@ -1,6 +1,6 @@
 import { DISCORD_INTERACTION_RESPONSE_TYPE, DISCORD_MESSAGE_FLAGS, verifyDiscordRequest } from "@/lib/discord";
-import { createInfoDeleteToken, deleteInfo, deleteInfoByToken, listInfos, resolveInfo, upsertInfo, type InfoEntry } from "@/lib/infos";
-import { createTodo, listTodos, markTodoDone, type Todo } from "@/lib/todos";
+import { deleteInfo, listInfos, resolveInfo, upsertInfo, type InfoEntry } from "@/lib/infos";
+import { createTodo, formatTodoList, listTodos, markTodoDone } from "@/lib/todos";
 
 type DiscordCommandOption = {
   name: string;
@@ -22,14 +22,6 @@ const INTERACTION_TYPE = {
   APPLICATION_COMMAND: 2,
   MESSAGE_COMPONENT: 3
 } as const;
-
-const COMPONENT_TYPE = {
-  ACTION_ROW: 1,
-  BUTTON: 2
-} as const;
-
-const MAX_TODO_INLINE_DELETE_ITEMS = 5;
-const MAX_INFO_INLINE_DELETE_ITEMS = 10;
 
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
@@ -55,189 +47,23 @@ function ephemeralMessage(content: string): Response {
   });
 }
 
-function ephemeralMessageWithComponents(content: string, components: unknown[]): Response {
-  return jsonResponse({
-    type: DISCORD_INTERACTION_RESPONSE_TYPE.CHANNEL_MESSAGE_WITH_SOURCE,
-    data: {
-      content,
-      components,
-      flags: DISCORD_MESSAGE_FLAGS.EPHEMERAL
-    }
-  });
-}
-
-function updateMessage(content: string, components: unknown[]): Response {
-  return jsonResponse({
-    type: 7,
-    data: {
-      content,
-      components
-    }
-  });
-}
-
-function makeDoneButtonId(id: number): string {
-  return `todo_delete:${id}`;
-}
-
-function parseDoneButtonId(customId: string): { id: number } | null {
-  const parts = customId.split(":");
-  if (parts.length < 2 || parts.length > 3 || (parts[0] !== "todo_done" && parts[0] !== "todo_delete")) {
-    return null;
-  }
-
-  const id = Number(parts[1]);
-  if (!Number.isInteger(id) || id <= 0) {
-    return null;
-  }
-
-  return { id };
-}
-
-function shorten(text: string, maxLength = 18): string {
-  if (text.length <= maxLength) {
-    return text;
-  }
-  return `${text.slice(0, maxLength - 1)}…`;
-}
-
-function makeInfoDeleteButtonId(token: string, limit: number): string {
-  return `info_delete:${token}:${limit}`;
-}
-
-function parseInfoDeleteButtonId(customId: string): { token: string; limit: number } | null {
-  const parts = customId.split(":");
-  if (parts.length !== 3 || parts[0] !== "info_delete") {
-    return null;
-  }
-
-  const limit = Number(parts[2]);
-  if (!Number.isInteger(limit) || limit <= 0) {
-    return null;
-  }
-
-  const token = parts[1]?.trim();
-  if (!token) {
-    return null;
-  }
-
-  return { token, limit };
-}
-
-function formatTodoListSummary(title: string, totalCount: number, shownCount: number): string {
-  if (totalCount === 0) {
-    return `${title}\n0件`;
-  }
-
-  if (totalCount > shownCount) {
-    return `${title} ${totalCount}件\n削除ボタンは先頭 ${shownCount}件まで表示しています。`;
-  }
-
-  return `${title} ${totalCount}件`;
-}
-
-function formatInfoListSummary(totalCount: number, shownCount: number): string {
-  if (totalCount === 0) {
+function formatInfoListMessage(infos: InfoEntry[]): string {
+  if (infos.length === 0) {
     return "info は0件です。/info で登録してください。";
   }
 
-  if (totalCount > shownCount) {
-    return `info 一覧 ${totalCount}件\n削除ボタンは先頭 ${shownCount}件まで表示しています。`;
-  }
-
-  return `info 一覧 ${totalCount}件`;
+  const lines = infos.map((info) => `- ${info.title}\n  ${info.url}`);
+  return `info 一覧 ${infos.length}件\n\n${lines.join("\n")}`;
 }
 
-function buildTodoButtons(todos: Todo[]) {
-  const openTodos = todos.filter((todo) => todo.status === "open");
-  const targets = openTodos.slice(0, MAX_TODO_INLINE_DELETE_ITEMS);
-
-  if (targets.length === 0) {
-    return { components: [], totalCount: openTodos.length, shownCount: 0 };
-  }
-
-  const rows = [];
-  for (let i = 0; i < targets.length; i += 1) {
-    const todo = targets[i];
-    rows.push({
-      type: COMPONENT_TYPE.ACTION_ROW,
-      components: [
-        {
-          type: COMPONENT_TYPE.BUTTON,
-          style: 2,
-          custom_id: `todo_label:${todo.id}:${i}`,
-          label: shorten(`#${todo.id} ${todo.text}`, 50),
-          disabled: true
-        },
-        {
-          type: COMPONENT_TYPE.BUTTON,
-          style: 4,
-          custom_id: makeDoneButtonId(todo.id),
-          label: "削除"
-        }
-      ]
-    });
-  }
-
-  return { components: rows, totalCount: openTodos.length, shownCount: targets.length };
-}
-
-async function buildInfoButtons(infos: InfoEntry[], limit: number) {
-  const targets = infos.slice(0, MAX_INFO_INLINE_DELETE_ITEMS);
-  if (targets.length === 0) {
-    return { components: [], totalCount: infos.length, shownCount: 0 };
-  }
-
-  const tokens = await Promise.all(targets.map((info) => createInfoDeleteToken(info.title)));
-  const rows = [];
-
-  for (let i = 0; i < targets.length; i += 2) {
-    const chunk = targets.slice(i, i + 2);
-    const components = chunk.flatMap((info, index) => {
-      const tokenIndex = i + index;
-      return [
-        {
-          type: COMPONENT_TYPE.BUTTON,
-          style: 2,
-          custom_id: `info_label:${tokenIndex}`,
-          label: shorten(info.title, 30),
-          disabled: true
-        },
-        {
-          type: COMPONENT_TYPE.BUTTON,
-          style: 4,
-          custom_id: makeInfoDeleteButtonId(tokens[tokenIndex], limit),
-          label: "削除"
-        }
-      ];
-    });
-
-    rows.push({
-      type: COMPONENT_TYPE.ACTION_ROW,
-      components
-    });
-  }
-
-  return { components: rows, totalCount: infos.length, shownCount: targets.length };
-}
-
-async function buildTodoListResponse() {
+async function buildTodoListResponse(): Promise<string> {
   const todos = await listTodos("open", 20);
-  const buttonView = buildTodoButtons(todos);
-
-  return {
-    content: formatTodoListSummary("TODO", buttonView.totalCount, buttonView.shownCount),
-    components: buttonView.components
-  };
+  return formatTodoList("TODO", todos);
 }
 
-async function buildInfoListResponse(limit: number) {
+async function buildInfoListResponse(limit: number): Promise<string> {
   const infos = await listInfos(limit);
-  const buttonView = await buildInfoButtons(infos, limit);
-  return {
-    content: formatInfoListSummary(buttonView.totalCount, buttonView.shownCount),
-    components: buttonView.components
-  };
+  return formatInfoListMessage(infos);
 }
 
 export async function POST(request: Request) {
@@ -257,35 +83,7 @@ export async function POST(request: Request) {
 
   try {
     if (interaction.type === INTERACTION_TYPE.MESSAGE_COMPONENT) {
-      const customId = interaction.data?.custom_id ?? "";
-      const parsed = parseDoneButtonId(customId);
-      if (!parsed) {
-        const infoParsed = parseInfoDeleteButtonId(customId);
-        if (!infoParsed) {
-          return updateMessage("不正なボタン操作です。", []);
-        }
-
-        const deleted = await deleteInfoByToken(infoParsed.token);
-        const nextView = await buildInfoListResponse(infoParsed.limit);
-        if (!deleted) {
-          return updateMessage(`削除対象が見つかりません\n\n${nextView.content}`, nextView.components);
-        }
-
-        return updateMessage(`削除しました\n${deleted.title}\n${deleted.url}\n\n${nextView.content}`, nextView.components);
-      }
-
-      const result = await markTodoDone(parsed.id);
-      const nextView = await buildTodoListResponse();
-
-      if (!result.todo) {
-        return updateMessage(`Todo #${parsed.id} が見つかりません\n\n${nextView.content}`, nextView.components);
-      }
-
-      if (result.alreadyDone) {
-        return updateMessage(`すでに削除済みです\n#${result.todo.id} ${result.todo.text}\n\n${nextView.content}`, nextView.components);
-      }
-
-      return updateMessage(`削除しました！\n#${result.todo.id} ${result.todo.text}\n\n${nextView.content}`, nextView.components);
+      return ephemeralMessage("一覧の削除ボタンは廃止しました。/todo-delete または /info-delete を使ってください。");
     }
 
     if (interaction.type !== INTERACTION_TYPE.APPLICATION_COMMAND) {
@@ -301,8 +99,8 @@ export async function POST(request: Request) {
     }
 
     if (commandName === "todo-list") {
-      const view = await buildTodoListResponse();
-      return ephemeralMessageWithComponents(view.content, view.components);
+      const content = await buildTodoListResponse();
+      return ephemeralMessage(content);
     }
 
     if (commandName === "todo-delete") {
@@ -356,8 +154,8 @@ export async function POST(request: Request) {
         return ephemeralMessage("limit は正の整数で入れてください。");
       }
 
-      const view = await buildInfoListResponse(limit);
-      return ephemeralMessageWithComponents(view.content, view.components);
+      const content = await buildInfoListResponse(limit);
+      return ephemeralMessage(content);
     }
 
     if (commandName === "info-delete") {
