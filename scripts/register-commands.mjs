@@ -43,19 +43,6 @@ const commands = [
     ]
   },
   {
-    name: "todo-done",
-    description: "Todo を完了にする",
-    type: 1,
-    options: [
-      {
-        name: "id",
-        description: "完了にしたい Todo ID",
-        type: 4,
-        required: true
-      }
-    ]
-  },
-  {
     name: "info",
     description: "情報を参照・登録する",
     type: 1,
@@ -86,19 +73,6 @@ const commands = [
         required: false,
         min_value: 1,
         max_value: 50
-      }
-    ]
-  },
-  {
-    name: "info-delete",
-    description: "登録済み情報を削除する",
-    type: 1,
-    options: [
-      {
-        name: "title",
-        description: "削除したい情報タイトル",
-        type: 3,
-        required: true
       }
     ]
   }

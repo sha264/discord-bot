@@ -25,12 +25,10 @@ sequenceDiagram
 ## できること
 
 - `/todo text:...` で Todo 追加
-- `/todo-list` で Todo 一覧取得
-- `/todo-done id:...` で完了
+- `/todo-list` で Todo 一覧取得とワンタッチ削除
 - `/info title:<title>` で登録済み情報を取得
 - `/info title:<title> url:<url>` で情報を登録/更新
-- `/info-delete title:<title>` で登録済み情報を削除
-- `/info-list` で登録済み情報の一覧を取得
+- `/info-list` で登録済み情報の一覧取得とワンタッチ削除
 - 毎朝 JST 8時台に未完了 Todo を Discord に自動通知
 
 ## 技術構成
@@ -154,9 +152,7 @@ npm run register:commands
 
 - 参照: `/info title:stay`
 - 登録/更新: `/info title:stay url:https://example.com`
-- 削除: `/info-delete title:stay`
-
-`/info-list` で現在の登録一覧を確認できます。
+- 削除: `/info-list` の削除ボタン
 
 ## Cron の仕様
 
